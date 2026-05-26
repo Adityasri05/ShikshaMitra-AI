@@ -16,43 +16,56 @@ export default function AITutor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // WebSocket real-time agent link
+  // WebSocket real-time agent link with graceful fallback
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const sId = studentId || 1;
     const wsUrl = `${WS_BASE_URL}/${sId}`;
-    console.log('Connecting to WebSocket:', wsUrl);
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'message' || data.type === 'welcome') {
-          addChatMessage({
-            sender: 'ai',
-            text: data.message_text
-          });
-          setIsTyping(false);
-        } else if (data.type === 'typing') {
-          setIsTyping(data.is_typing);
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected to AI tutor.');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'message' || data.type === 'welcome') {
+            addChatMessage({
+              sender: 'ai',
+              text: data.message_text
+            });
+            setIsTyping(false);
+          } else if (data.type === 'typing') {
+            setIsTyping(data.is_typing);
+          }
+        } catch (err) {
+          console.error('Failed to parse WS data:', err);
         }
-      } catch (err) {
-        console.error('Failed to parse WS data:', err);
-      }
-    };
+      };
 
-    ws.onerror = (err) => {
-      console.warn('WebSocket connection error. Falling back to REST mode.', err);
-    };
+      ws.onerror = () => {
+        // Silently fall back to REST mode — no error spam
+        console.info('WebSocket unavailable. Using REST API fallback.');
+      };
 
-    ws.onclose = () => {
-      console.log('WebSocket closed.');
+      ws.onclose = () => {
+        wsRef.current = null;
+      };
+    } catch {
+      // WebSocket constructor can throw if URL is invalid
+      console.info('WebSocket connection failed. Using REST API fallback.');
       wsRef.current = null;
-    };
+    }
 
     return () => {
-      ws.close();
+      if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+      }
     };
   }, [studentId, addChatMessage]);
 
@@ -60,83 +73,6 @@ export default function AITutor() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, isTyping]);
-
-  // Vernacular response intelligence based on selected dialect
-  const getAIResponse = (userQuery: string, dialect: Dialect): string => {
-    const q = userQuery.toLowerCase();
-
-    const responses = {
-      hindi: {
-        trig: `त्रिकोणमिति (Trigonometry) गणित की वह शाखा है जो त्रिभुजों की भुजाओं और कोणों के बीच संबंधों का अध्ययन करती है। 
-इसके मुख्य अनुपात हैं:
-1. **sin θ** = लम्ब / कर्ण (Perpendicular / Hypotenuse)
-2. **cos θ** = आधार / कर्ण (Base / Hypotenuse)
-3. **tan θ** = लम्ब / आधार (Perpendicular / Base)
-
-याद रखने की ट्रिक: **लाल/कक्का (LAL/KKA)**!`,
-        photosynthesis: `प्रकाश संश्लेषण (Photosynthesis) वह प्रक्रिया है जिसके द्वारा हरे पौधे सूर्य के प्रकाश की उपस्थिति में जल (H₂O) और कार्बन डाइऑक्साइड (CO₂) को ग्लूकोज (भोजन) और ऑक्सीजन (O₂) में बदलते हैं।
-समीकरण:
-**6CO₂ + 6H₂O + धूप → C₆H₁₂O₆ + 6O₂**`,
-        default: `बहुत अच्छा प्रश्न है! आपकी बोर्ड परीक्षा (UP Board) के लिए यह काफी महत्वपूर्ण है। 
-आइए इसे विस्तार से समझते हैं... 
-(यह विषय आपके पाठ्यक्रम के अध्याय 5 में है। क्या आप इस पर आधारित एक परीक्षा प्रश्न हल करना चाहेंगे?)`
-      },
-      hinglish: {
-        trig: `Trigonometry yaani trikonmiti! Ye math ki wo branch hai jo triangle ki sides aur angles ke beech ke relation ko study karti hai.
-Iske main ratios hain:
-1. **sin θ** = L/K (Lambh / Karn)
-2. **cos θ** = A/K (Aadhar / Karn)
-3. **tan θ** = L/A (Lambh / Aadhar)
-
-Bhaiya, isko yaad rakhne ka best formula hai **LAL/KKA**!`,
-        photosynthesis: `Photosynthesis wo process hai jisse green plants sunlight ki presence me paani (H₂O) aur Carbon Dioxide (CO₂) ka use karke glucose aur oxygen banate hain.
-Equation hai:
-**6CO₂ + 6H₂O + Sunlight → C₆H₁₂O₆ + 6O₂**
-Pehle carbon dioxide aur paani milte hain, fir glucose (food) aur oxygen release hoti hai!`,
-        default: `Wow! Ye toh bahut badhiya question pucha aapne. UP Board exams ke point of view se ye bahut important hai.
-Chaliye isko ekdum easy way me samajhte hain...
-Kya aap is topic par ek practice question solve karna chahenge?`
-      },
-      awadhi: {
-        trig: `अरे भैया! त्रिकोणमिति क मतलब होत है तीन कोणन क नाप। इ गणित क अइसन हिस्सा है जहाँ हम सब त्रिभुज क कोण अउर ओकर देवालन (भुजाओं) क सम्बंध पढ़ित है।
-इके खास सूत्र लिख लेंव:
-1. **sin θ** = लम्ब / कर्ण
-2. **cos θ** = आधार / कर्ण
-3. **tan θ** = लम्ब / आधार
-
-भैया, याद रक्खे क देसी नुस्खा: **लाल/कक्का**!`,
-        photosynthesis: `पौधन क भोजन बनावै क विधि क हम सब प्रकाश संश्लेषण कहित हन। जब धूप चमचमात है, तब हरी पत्तियां पानी अउर हवा क कार्बन डाइऑक्साइड मिलाय क ग्लूकोज (मीठा भोजन) बनावत हिन अउर हम सब का सांस लेवै खातिर ऑक्सीजन देवत हिन।
-समीकरण लिख लेंव:
-**6CO₂ (हवा) + 6H₂O (पानी) + धूप → C₆H₁₂O₆ (भोजन) + 6O₂ (ऑक्सीजन)**`,
-        default: `वाह भैया! का गजब क बात पूछेव है। ई सवाल तोहार बोर्ड परीक्षा मा बार-बार पूझा जात है।
-आवा, एका एकदम देसी भाखा मा अउर आसान करके समझित हन...
-का एका अउर हलका (simplify) करी जाय?`
-      },
-      bhojpuri: {
-        trig: `त्रिकोणमिति के मतलब होला तीन गो कोण के नाप-जोख। गणित के अइसन हिस्सा हवे जेहमे हमनी के त्रिभुज के कोण आ ओकर भुजा के संबंध के बारे में पढ़ल जाला।
-एकर मुख्य अनुपात बा:
-1. **sin θ** = लम्ब / कर्ण
-2. **cos θ** = आधार / कर्ण
-3. **tan θ** = लम्ब / आधार
-
-काहे कि याद रखे खातिर सबसे बढ़िया ट्रिक बा: **लाल/कक्का (LAL/KKA)**!`,
-        photosynthesis: `पेड़-पौधा के भोजन बनावे के क्रिया के प्रकाश संश्लेषण कहल जाला। जब धूप उगेला, त पत्ता पानी आ हवा के कार्बन डाइऑक्साइड के मिला के आपन भोजन (ग्लूकोज) बनावेला आ ऑक्सीजन छोड़ेला।
-समीकरण:
-**6CO₂ + 6H₂O + धूप → C₆H₁₂O₆ + 6O₂**`,
-        default: `अरे बाबू! रउआ त बहुते नीक सवाल पुछनी ह। ई सवाल यूपी बोर्ड परीक्षा में बार-बार आवेला।
-आईं, एकरा के बहुते आसान भाखा में समझल जाओ...
-का रउआ एकरा पर कवनो सवाल हल कइल चाहत बानी?`
-      }
-    };
-
-    const activeSet = responses[dialect] || responses['hinglish'];
-    if (q.includes('trig') || q.includes('त्रिकोण') || q.includes('कोण')) {
-      return activeSet.trig;
-    } else if (q.includes('photo') || q.includes('संश्लेषण') || q.includes('plants') || q.includes('समीकरण')) {
-      return activeSet.photosynthesis;
-    }
-    return activeSet.default;
-  };
 
   const handleSend = async (text: string, imageFile?: File, imageSrc?: string) => {
     if (!text.trim() && !imageFile && !imageSrc) return;
@@ -192,7 +128,7 @@ Kya aap is topic par ek practice question solve karna chahenge?`
     } else if (actionType === 'question') {
       queryText = 'इस टॉपिक पर एक परीक्षा प्रश्न बनाइए (Generate practice question)';
     } else if (actionType === 'pyq') {
-      queryText = 'इस टॉपिक से जुड़े पिछले वर्षों के प्रश्न (PYQs) दिखाएं';
+      queryText = 'इस टॉपिक से जुड़े पिछले वर्षों के प्रश्न (PYQs) दिखाएं';
     } else if (actionType === 'translate') {
       queryText = 'इसे शुद्ध हिंदी में अनुवाद करें (Translate to pure Hindi)';
     }

@@ -1,18 +1,17 @@
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
-
+from google import genai
 from app.config import settings
 import random
 import json
 
-# Initialize Gemini API if key is supplied
-if genai and settings.GEMINI_API_KEY:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash-lite')
-else:
-    model = None
+# Initialize Gemini API Client if key is supplied
+client = None
+if settings.GEMINI_API_KEY:
+    try:
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    except Exception:
+        client = None
+
+MODEL_ID = "gemini-2.5-flash-lite"
 
 # Custom stubs matching dialect tones
 DIALECT_ANSWERS = {
@@ -22,7 +21,7 @@ DIALECT_ANSWERS = {
         "default": "वाह भैया! का गजब क बात पूछेव है। ई सवाल तोहार बोर्ड परीक्षा मा बार-बार पूझा जात है। एका अच्छे से तैयार कइ लेंव।"
       },
     "bhojpuri": {
-        "trig": "त्रिकोणमिति के मतलब होला तीन गो कोण के नाप-जोख। लम्ब, आधार आ कर्ण के संबंध सीखें: sin A = लम्ब/कर्ण। याद रखे खातिर बढ़िया ट्रिक बा: लाल/कक्का!",
+        "trig": "त्रिकोणमिति के मतलब होला तीन गो कोण के नाप-जोख। लम्ब, आधार आ कर्ण के संबंध सीखें: sin A = लम्ब/कर्ण। याद रखे खातिर बढ़िया ट्रिक बा: लाल/कक्का!",
         "light": "बाबू! प्रकाश के अपवर्तन आ परावर्तन त बहुते नीक अध्याय बा। जब रोशनी कवनो चमकीला सतह से टकरा के वापस आवेला, ओकरा के परावर्तन कहल जाला।",
         "default": "अरे बाबू! रउआ त बहुते नीक सवाल पुछनी ह। ई सवाल यूपी बोर्ड परीक्षा में बार-बार आवेला। आवा एकरा के आसान भाखा में समझल जाओ।"
       },
@@ -42,10 +41,13 @@ class DialectTranslationAgent:
     """Translates educational terms and explanations into targeted local dialects (Awadhi, Bhojpuri)."""
     @staticmethod
     def translate(text: str, target_dialect: str) -> str:
-        if model:
+        if client:
             try:
                 prompt = f"Translate the following educational explanation into a warm, encouraging, colloquial {target_dialect} tone suitable for a UP Board student. Keep math terms in brackets. Text: {text}"
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(
+                    model=MODEL_ID,
+                    contents=prompt
+                )
                 return response.text
             except Exception:
                 pass
@@ -61,14 +63,20 @@ class TutorAgent:
     """Tutors students in academic content conversationally using target dialects."""
     @staticmethod
     def answer_query(query: str, dialect: str, image_data: bytes = None) -> str:
-        if model:
+        if client:
             try:
                 prompt = f"You are ShikshaMitra AI, a friendly, encouraging UP Board coach. Reply to this query: '{query}' in a conversational {dialect} dialect. Explain concepts step-by-step."
                 if image_data:
                     # Multimodal analysis stubs
-                    response = model.generate_content([prompt, image_data])
+                    response = client.models.generate_content(
+                        model=MODEL_ID,
+                        contents=[prompt, image_data]
+                    )
                 else:
-                    response = model.generate_content(prompt)
+                    response = client.models.generate_content(
+                        model=MODEL_ID,
+                        contents=prompt
+                    )
                 return response.text
             except Exception:
                 pass
@@ -111,7 +119,7 @@ class QuizGeneratorAgent:
             },
             {
                 "question": "अवतल दर्पण (Concave Mirror) का उपयोग कहाँ होता है?",
-                "options": ["गाड़ी की हेडलाइट में", "गाड़ी के साइड मिरर में", "रोड लाइट में", "इनमे से कोई नहीं"],
+                "options": ["गाड़ी की हेडलाइट में", "गाड़ी के साइड मिरर में", "रोड लाइट में", "इनमे से कोई नहीं"],
                 "correct_option": 0,
                 "explanation": "अवतल दर्पण प्रकाश को समानांतर किरणों के रूप में केंद्रित करता है, इसलिए हेडलाइट में उपयोग किया जाता है."
             }
@@ -135,7 +143,7 @@ class ExamStrategyAgent:
     def get_strategy_timeline(days_remaining: int) -> list:
         if days_remaining <= 20:
             return [
-                {"day": "Day 1-5", "task": "बीजगणित और त्रिकोणमिति के सूत्र रिवीज़न + 5 PYQs"},
+                {"day": "Day 1-5", "task": "बीजगणित और त्रिकोणमिति के सूत्र रिवीज़न + 5 PYQs"},
                 {"day": "Day 6-10", "task": "प्रकाश परावर्तन और रासायनिक समीकरणों का अभ्यास"},
                 {"day": "Day 11-15", "task": "अंग्रेजी ग्रामर और निबंध लेखन अभ्यास"},
                 {"day": "Day 16-20", "task": "यूपी बोर्ड पिछले 3 वर्षों के मॉडल पेपर हल करना"}
@@ -150,8 +158,8 @@ class MotivationAgent:
     @staticmethod
     def get_motivational_nudge(streak: int, last_score: int) -> str:
         nudges = [
-            f"अरे वाह! आपका लगातार {streak} दिनों का स्टडी स्ट्राइक बन गया है। शेरशाह की तरह दहाड़ते रहें! 🦁",
-            "सफलता एक दिन में नहीं मिलती, लेकिन हर दिन की गई छोटी मेहनत बोर्ड में 95% दिलाएगी। पढ़ते रहें!",
+            f"अरे वाह! आपका लगातार {streak} दिनों का स्टडी स्ट्राइक बन गया है। शेरशाह की तरह दहाड़ते रहें! 🦁",
+            "सफलता एक दिन में नहीं मिलती, लेकिन हर दिन की गई छोटी मेहनत बोर्ड में 95% दिलाएगी। पढ़ते रहें!",
             "हजरतगंज (Lucknow) की तंग गलियों से निकलकर बोर्ड परीक्षा के टॉपर बनने का सपना सच होगा। हौसला रखें!"
         ]
         

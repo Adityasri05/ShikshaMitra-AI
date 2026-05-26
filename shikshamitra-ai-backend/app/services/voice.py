@@ -99,20 +99,23 @@ class OCRService:
         """
         if settings.GEMINI_API_KEY:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.5-flash-lite")
+                from google import genai
+
+                client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
                 import PIL.Image
                 import io
                 image = PIL.Image.open(io.BytesIO(image_bytes))
 
-                response = model.generate_content([
-                    "Extract all text from this student notebook/textbook image. "
-                    "If it contains a math problem, identify the problem clearly. "
-                    "Return the extracted text in Hindi if the content is in Hindi.",
-                    image
-                ])
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-lite",
+                    contents=[
+                        "Extract all text from this student notebook/textbook image. "
+                        "If it contains a math problem, identify the problem clearly. "
+                        "Return the extracted text in Hindi if the content is in Hindi.",
+                        image
+                    ]
+                )
                 return response.text
             except Exception:
                 pass
