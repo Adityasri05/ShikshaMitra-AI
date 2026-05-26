@@ -1,0 +1,30 @@
+import os
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    # App Settings
+    PROJECT_NAME: str = "ShikshaMitra AI Backend"
+    VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
+    
+    # Security
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecretkeyforlocaltesting_changeinproduction")
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 # 24 hours
+    
+    # Databases
+    # Defaults to SQLite out-of-the-box for smooth demo setups. If DATABASE_URL is supplied, it connects to PostgreSQL.
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./shikshamitra.db")
+    
+    # AI Credentials (Optional falling back to stubs if not set)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    
+    # Vector Database Configuration
+    CHROMA_DB_PATH: str = os.getenv("CHROMA_DB_PATH", "./chroma_data")
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+settings = Settings()
