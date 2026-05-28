@@ -5,6 +5,9 @@
 
 ---
 
+## Problem Statement:
+— Vernacular AI tutor for UP Board students Lakhs of UP Board students prepare in Hindi/Awadhi with little access to quality coaching. Build an agentic tutor that identifies learning gaps, generates practice questions from past papers, and adapts to each student's dialect and pace. Lucknow context: UP Board · Hazratganj coaching belt.
+
 ## 💡 Project Idea & Features
 Students studying in UP Board schools often face a lack of premium-quality resources in their local dialects. ShikshaMitra AI bridges this gap through a multi-agent system and conversational voice tutor.
 
